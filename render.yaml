@@ -7,8 +7,10 @@ services:
       # can build without downloading a browser. The evaluation code will detect
       # if Playwright/browsers are available and fall back to an HTTP-based
       # checker when necessary.
-      buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn api_server:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install -r requirements.txt
+    # Use the equals form so the port value is passed as part of the option
+    # token (avoids CLI parsing issues in some shells):
+    startCommand: uvicorn api_server:app --host 0.0.0.0 --port=$PORT
     envVars:
       - key: GITHUB_TOKEN
         sync: false
