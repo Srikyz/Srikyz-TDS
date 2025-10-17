@@ -2,7 +2,7 @@ services:
   - type: web
     name: app-builder-api
     env: python
-    buildCommand: pip install -r requirements.txt && playwright install chromium
+    buildCommand: pip install -r requirements.txt && playwright install --with-deps chromium1
     startCommand: uvicorn api_server:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: GITHUB_TOKEN
@@ -11,3 +11,5 @@ services:
         sync: false
       - key: OPENAI_API_KEY
         sync: false
+      - key: PLAYWRIGHT_BROWSERS_PATH
+        value: /opt/render/.cache/ms-playwright
