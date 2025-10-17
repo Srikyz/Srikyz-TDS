@@ -1,0 +1,92 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+evaluation.db
+
+# Secrets and credentials - NEVER COMMIT THESE
+secrets.json
+.env
+*.pem
+*.key
+
+# Environment-specific files
+set_env.ps1
+*.local.ps1
+
+# Working directories
+workdir/
+temp/
+tmp/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# GitHub tokens and credentials
+*.token
+credentials.json
+
+# Test outputs
+test_output/
+*.test
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pytest
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Node modules (if any)
+node_modules/

@@ -1,0 +1,18 @@
+{
+  "email": "student@example.com",
+  "secret": "test-secret-12345",
+  "task": "svg-image-viewer-demo",
+  "round": 1,
+  "nonce": "round1-nonce-abc123",
+  "brief": "Create an image viewer web app that displays images from the ?url= query parameter. The app should handle both regular images (PNG, JPEG) and display them in a centered, responsive layout with a nice border and shadow.",
+  "checks": [
+    "Repo has MIT license",
+    "README.md is professional and complete",
+    "Displays image from ?url= parameter",
+    "Shows friendly error for invalid or missing URLs",
+    "Design is clean and responsive",
+    "Works in modern browsers"
+  ],
+  "evaluation_url": "https://httpbin.org/post",
+  "attachments": []
+}

@@ -1,0 +1,22 @@
+{
+  "email": "student@example.com",
+  "secret": "test-secret-12345",
+  "task": "svg-image-viewer-demo",
+  "round": 2,
+  "nonce": "round2-nonce-def456",
+  "brief": "Update the image viewer to specifically handle SVG images. Add zoom in/out controls (+/- buttons), pan functionality (drag to move the SVG), and a reset button to return to original view. Show file format info (PNG/JPEG/SVG) below the image. Improve the UI with a dark theme and better controls.",
+  "checks": [
+    "Repo has MIT license",
+    "README.md is professional and updated with new features",
+    "Displays image from ?url= parameter",
+    "Handles SVG images with special features",
+    "Has zoom in/out controls that work",
+    "Has pan/drag functionality for SVG files",
+    "Shows file format information",
+    "Has reset button to restore original view",
+    "Dark theme with improved UI",
+    "Works in modern browsers"
+  ],
+  "evaluation_url": "https://httpbin.org/post",
+  "attachments": []
+}

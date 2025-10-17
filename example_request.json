@@ -1,0 +1,17 @@
+{
+  "email": "student@example.com",
+  "secret": "my-secret-key-12345",
+  "task": "captcha-solver-abc123",
+  "round": 1,
+  "nonce": "ab12-cd34-ef56",
+  "brief": "Create a captcha solver that handles ?url=https://.../image.png. Default to attached sample. The app should display the captcha image and solve it using OCR or an API within 15 seconds.",
+  "checks": [
+    "Repo has MIT license",
+    "README.md is professional",
+    "Page displays captcha URL passed at ?url=...",
+    "Page displays solved captcha text within 15 seconds",
+    "App works without external dependencies loading"
+  ],
+  "evaluation_url": "https://example.com/api/evaluate",
+  "attachments": []
+}
