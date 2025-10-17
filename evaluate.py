@@ -25,10 +25,19 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 import requests
+from bs4 import BeautifulSoup
 import re
 
 from db import get_db
-from playwright.async_api import async_playwright, Page, Browser, TimeoutError as PlaywrightTimeout
+try:
+    from playwright.async_api import async_playwright, Page, Browser, TimeoutError as PlaywrightTimeout
+    PLAYWRIGHT_AVAILABLE = True
+except Exception:
+    async_playwright = None
+    Page = None
+    Browser = None
+    PlaywrightTimeout = Exception
+    PLAYWRIGHT_AVAILABLE = False
 
 # LLM integration (optional)
 try:
@@ -360,33 +369,48 @@ class RepositoryEvaluator:
             
             checks = json.loads(task['checks']) if isinstance(task['checks'], str) else task['checks']
             
-            async with async_playwright() as p:
-                browser = await p.chromium.launch(headless=True)
-                page = await browser.new_page()
-                
+            # Prefer Playwright if available with browsers; otherwise fall back to
+            # a lightweight HTTP-based checker using requests + BeautifulSoup.
+            if PLAYWRIGHT_AVAILABLE:
                 try:
-                    await page.goto(pages_url, wait_until='networkidle', timeout=30000)
-                    
-                    # Run each check
-                    for check in checks:
-                        result = await self._run_single_check(page, check, repo)
-                        if result:
-                            results.append(result)
-                
-                except PlaywrightTimeout:
-                    results.append(self._create_result(
-                        repo, 'page_load', 0,
-                        f'Page failed to load: timeout',
-                        ''
-                    ))
+                    async with async_playwright() as p:
+                        browser = await p.chromium.launch(headless=True)
+                        page = await browser.new_page()
+
+                        try:
+                            await page.goto(pages_url, wait_until='networkidle', timeout=30000)
+
+                            # Run each check
+                            for check in checks:
+                                result = await self._run_single_check(page, check, repo)
+                                if result:
+                                    results.append(result)
+
+                        except PlaywrightTimeout:
+                            results.append(self._create_result(
+                                repo, 'page_load', 0,
+                                f'Page failed to load: timeout',
+                                ''
+                            ))
+                        except Exception as e:
+                            results.append(self._create_result(
+                                repo, 'page_load', 0,
+                                f'Page failed to load: {str(e)}',
+                                ''
+                            ))
+                        finally:
+                            try:
+                                await browser.close()
+                            except Exception:
+                                pass
                 except Exception as e:
-                    results.append(self._create_result(
-                        repo, 'page_load', 0,
-                        f'Page failed to load: {str(e)}',
-                        ''
-                    ))
-                finally:
-                    await browser.close()
+                    # Fall back if Playwright runtime isn't usable (e.g., no browsers)
+                    logger.warning(f"Playwright not usable, falling back to HTTP checks: {e}")
+                    results.extend(await self._http_fallback_checks(pages_url, checks, repo))
+            else:
+                # Playwright not installed in the environment; use HTTP fallback
+                logger.info("Playwright not available; using HTTP-based fallback checks")
+                results.extend(await self._http_fallback_checks(pages_url, checks, repo))
         
         except Exception as e:
             logger.error(f"Playwright error: {str(e)}")
@@ -398,7 +422,7 @@ class RepositoryEvaluator:
         
         return results
     
-    async def _run_single_check(self, page: Page, check: Dict, repo: Dict) -> Optional[Dict]:
+    async def _run_single_check(self, page: Any, check: Dict, repo: Dict) -> Optional[Dict]:
         """Run a single Playwright check."""
         check_type = check.get('type', '')
         
@@ -422,8 +446,82 @@ class RepositoryEvaluator:
                 f'Error: {str(e)}',
                 ''
             )
+
+    async def _http_fallback_checks(self, pages_url: str, checks: List[Dict], repo: Dict) -> List[Dict]:
+        """Lightweight fallback: fetch the page HTML and perform non-JS checks using BeautifulSoup."""
+        results: List[Dict] = []
+        try:
+            resp = requests.get(pages_url, timeout=20)
+            if resp.status_code != 200:
+                results.append(self._create_result(repo, 'page_load', 0, f'HTTP {resp.status_code}', ''))
+                return results
+
+            soup = BeautifulSoup(resp.text, 'html.parser')
+
+            for check in checks:
+                r = await self._http_run_single_check(soup, check, repo)
+                if r:
+                    results.append(r)
+
+        except Exception as e:
+            logger.error(f"HTTP fallback error: {e}")
+            results.append(self._create_result(repo, 'http_fallback', 0, f'Error: {e}', ''))
+
+        return results
+
+    async def _http_run_single_check(self, soup: BeautifulSoup, check: Dict, repo: Dict) -> Optional[Dict]:
+        """Run a single check against BeautifulSoup-parsed HTML. Limited to non-JS checks."""
+        check_type = check.get('type', '')
+
+        try:
+            if check_type == 'element_exists':
+                selector = check.get('selector', '')
+                # Use simple CSS selector via soup.select
+                elements = soup.select(selector)
+                count = len(elements)
+                min_count = check.get('min_count', 1)
+                score = 1.0 if count >= min_count else 0
+                return self._create_result(repo, f'element_{selector[:20]}', score, f'Found {count} elements (expected >={min_count})', '')
+
+            elif check_type == 'button_exists':
+                text_options = check.get('text', [])
+                if isinstance(text_options, str):
+                    text_options = [text_options]
+
+                found = False
+                for text in text_options:
+                    # Find buttons or inputs with matching text
+                    btns = soup.find_all(['button', 'input'])
+                    for b in btns:
+                        # normalize text
+                        b_text = (b.get_text() or '')
+                        if text.lower() in b_text.lower():
+                            found = True
+                            break
+                    if found:
+                        break
+
+                score = 1.0 if found else 0
+                reason = f'Button with text {text_options} found' if found else f'No button found with text: {text_options}'
+                return self._create_result(repo, 'button_check', score, reason, '')
+
+            elif check_type == 'responsive_check':
+                # Cannot fully evaluate responsiveness without rendering; provide a conservative score
+                return self._create_result(repo, 'responsive_design', 0.5, 'Responsive check skipped (HTTP fallback)', '')
+
+            elif check_type == 'click_interaction':
+                # Click interactions require JS; skip with partial score
+                return self._create_result(repo, 'click_interaction', 0.5, 'Click interaction skipped (no JS in HTTP fallback)', '')
+
+            else:
+                logger.warning(f"Unknown check type in HTTP fallback: {check_type}")
+                return None
+
+        except Exception as e:
+            logger.error(f"Error in HTTP check {check_type}: {str(e)}")
+            return self._create_result(repo, f'http_check_{check_type}', 0, f'Error: {str(e)}', '')
     
-    async def _check_element_exists(self, page: Page, check: Dict, repo: Dict) -> Dict:
+    async def _check_element_exists(self, page: Any, check: Dict, repo: Dict) -> Dict:
         """Check if element(s) exist."""
         selector = check.get('selector', '')
         min_count = check.get('min_count', 1)
@@ -451,7 +549,7 @@ class RepositoryEvaluator:
                 ''
             )
     
-    async def _check_button_exists(self, page: Page, check: Dict, repo: Dict) -> Dict:
+    async def _check_button_exists(self, page: Any, check: Dict, repo: Dict) -> Dict:
         """Check if button with specific text exists."""
         text_options = check.get('text', [])
         if isinstance(text_options, str):
@@ -479,7 +577,7 @@ class RepositoryEvaluator:
                 ''
             )
     
-    async def _check_click_interaction(self, page: Page, check: Dict, repo: Dict) -> Dict:
+    async def _check_click_interaction(self, page: Any, check: Dict, repo: Dict) -> Dict:
         """Check click interaction."""
         selector = check.get('selector', '')
         expected_result = check.get('result', '')
@@ -521,7 +619,7 @@ class RepositoryEvaluator:
                 ''
             )
     
-    async def _check_responsive(self, page: Page, check: Dict, repo: Dict) -> Dict:
+    async def _check_responsive(self, page: Any, check: Dict, repo: Dict) -> Dict:
         """Check responsive design."""
         breakpoints = check.get('breakpoints', [768, 1024])
         

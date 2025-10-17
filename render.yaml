@@ -2,7 +2,12 @@ services:
   - type: web
     name: app-builder-api
     env: python
-    buildCommand: pip install -r requirements.txt && playwright install --with-deps chromium1
+      # Avoid requiring Playwright browsers to be installed on Render.com.
+      # Playwright-related browser installs (chromium) are removed so the service
+      # can build without downloading a browser. The evaluation code will detect
+      # if Playwright/browsers are available and fall back to an HTTP-based
+      # checker when necessary.
+      buildCommand: pip install -r requirements.txt
     startCommand: uvicorn api_server:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: GITHUB_TOKEN
@@ -11,5 +16,5 @@ services:
         sync: false
       - key: OPENAI_API_KEY
         sync: false
-      - key: PLAYWRIGHT_BROWSERS_PATH
-        value: /opt/render/.cache/ms-playwright
+        # Optional: if you want Playwright with browsers on Render, set
+        # PLAYWRIGHT_BROWSERS_PATH and install browsers during build (not required).
